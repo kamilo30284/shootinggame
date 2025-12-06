@@ -1,45 +1,17 @@
-from game_config import GAME_DURATION, PLAYER_STARTING_LIFE
-
-class GameState:
+# core/input_handler.py
+class InputHandler:
     def __init__(self, game):
         self.game = game
-        self.reset()
+        self.key_map = {"left": False, "right": False}
 
-    def reset(self):
-        self.game_over = False
-        self.last_win = None
-        self.start_time = globalClock.getRealTime()
-        self.player_life = PLAYER_STARTING_LIFE
-        self.win_count = 0
-        self.stage = 1
+    def bind_inputs(self):
+        self.game.accept("arrow_left", self.set_key, ["left", True])
+        self.game.accept("arrow_left-up", self.set_key, ["left", False])
+        self.game.accept("arrow_right", self.set_key, ["right", True])
+        self.game.accept("arrow_right-up", self.set_key, ["right", False])
+        self.game.accept("enter", self.game.task_manager.restart_game)
+        self.game.accept("escape", self.game.userExit)
 
-    def take_damage(self):
-        self.player_life -= 1
-        self.game.ui_system.update_life_text(self.player_life)
-        self.game.effect_system.start_screen_shake()
-        self.game.effect_system.show_red_filter()
-        if self.player_life <= 0:
-            self.end_game(win=False)
-
-    def end_game(self, win):
-        self.game_over = True
-        self.last_win = win
-        if win:
-            self.win_count += 1
-            self.stage += 1
-            self.game.ui_system.show_win_message(self.stage)
-            self.game.taskMgr.doMethodLater(3.0, self._auto_restart, "auto_restart")
-        else:
-            self.stage = 1
-            self.game.ui_system.show_lose_message()
-
-    def _auto_restart(self, task):
-        self.game.task_manager.restart_game()
-        return task.done
-
-    def check_end_conditions(self):
-        elapsed = globalClock.getRealTime() - self.start_time
-        if elapsed >= GAME_DURATION:
-            self.end_game(win=True)
-        elif self.player_life <= 0:
-            self.end_game(win=False)
+    def set_key(self, key, value):
+        self.key_map[key] = value
+        self.game.player.update_texture()
