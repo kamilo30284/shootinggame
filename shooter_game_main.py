@@ -465,14 +465,17 @@ class ShootingGame(ShowBase):
             enemy.setY(enemy.getY() - speed * dt)
 
             should_remove_enemy = False
+            damage_taken = False
 
             if enemy.getY() <= PLAYER_START_Y:
 
                 if abs(enemy.getX() - self.player.getX()) < 1.0:
                     self.takeDamage()
                     should_remove_enemy = True
+                    damage_taken = True
 
-                if enemy.getY() < PLAYER_START_Y:
+                if enemy.getY() < PLAYER_START_Y and not damage_taken:
+                    self.takeDamage()
                     should_remove_enemy = True
 
             if should_remove_enemy:
