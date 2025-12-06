@@ -398,31 +398,34 @@ class ShootingGame(ShowBase):
                 shot.removeNode()
                 self.shots.remove(shot)
 
+    def takeDamage(self):
+        self.playerLife -= 1
+        self.lifeText.setText(f"Life: {self.playerLife}")
+        self.startScreenShake()
+        self.showRedFilter()
+        if self.playerLife <= 0:
+            self.endGame(win=False)
+
     def updateEnemies(self, dt):
         """Moves enemies downward and checks for collision with the player."""
         for enemy in self.enemies[:]:
             speed = enemy.getPythonTag("speed")
             enemy.setY(enemy.getY() - speed * dt)
-            # Check for collision with the player (simple horizontal distance check)
+
+            should_remove_enemy = False
+
             if enemy.getY() <= PLAYER_START_Y:
-                # Check collision when enemy reaches player's y coordinate
+
                 if abs(enemy.getX() - self.player.getX()) < 1.0:
-                    self.playerLife -= 1
-                    self.lifeText.setText(f"Life: {self.playerLife}")
-                    self.startScreenShake()
-                    self.showRedFilter()
-                    if self.playerLife <= 0:
-                        self.endGame(win=False)
-                    # In either case (collision or just reaching bottom), reduce life and remove the enemy
-                if enemy in self.enemies: # Check if enemy was already removed due to collision
-                    self.playerLife -= 1
-                    self.lifeText.setText(f"Life: {self.playerLife}")
-                    self.startScreenShake()
-                    self.showRedFilter()
-                    enemy.removeNode()
-                    self.enemies.remove(enemy)
-                    if self.playerLife <= 0:
-                        self.endGame(win=False)
+                    self.takeDamage()
+                    should_remove_enemy = True
+
+                if enemy.getY() < PLAYER_START_Y:
+                    should_remove_enemy = True
+
+            if should_remove_enemy:
+                enemy.removeNode()
+                self.enemies.remove(enemy)
                 continue
 
     def updateBonuses(self, dt):
