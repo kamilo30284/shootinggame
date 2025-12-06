@@ -86,3 +86,6 @@ ENEMY_SPAWN_PROB = [0.45, 0.25, 0.20, 0.10]
 
 # Player configuration
 PLAYER_STARTING_LIFE = 3
+
+HIGH_SCORE_FILE = "highscores.json"
+MAX_HIGH_SCORES = 5

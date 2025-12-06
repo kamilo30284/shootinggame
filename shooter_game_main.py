@@ -6,7 +6,8 @@ Panda3D Shooting Game with Third-Person Perspective and Background
 # Standard library imports
 import random
 import sys
-
+import json
+import os
 # Panda3D imports
 from direct.showbase.ShowBase import ShowBase
 from direct.task import Task
@@ -53,7 +54,8 @@ from game_config import (
     # Enemy configuration
     ENEMY_TYPES, ENEMY_SPAWN_PROB,
     # Player configuration
-    PLAYER_STARTING_LIFE
+    PLAYER_STARTING_LIFE,
+    HIGH_SCORE_FILE, MAX_HIGH_SCORES
 )
 
 # ============================
@@ -79,10 +81,10 @@ class ShootingGame(ShowBase):
         # Initialize game state parameters
         self.gameOver = False
         self.gameStartTime = globalClock.getRealTime()
-        self.shots = []        # List to hold active shots
-        self.enemies = []      # List to hold active enemies
-        self.explosions = []   # List to hold active explosions
-        self.bonuses = []      # List to hold active bonuses
+        self.shots = []  # List to hold active shots
+        self.enemies = []  # List to hold active enemies
+        self.explosions = []  # List to hold active explosions
+        self.bonuses = []  # List to hold active bonuses
         self.keyMap = {"left": False, "right": False}
         self.playerLife = PLAYER_STARTING_LIFE
 
@@ -91,9 +93,11 @@ class ShootingGame(ShowBase):
         self.currentShotScale = SHOT_SCALE
 
         # New feature: win and stage tracking
-        self.winCount = 0       # Counts total wins (games won)
-        self.stage = 1          # Current stage (starts at 1)
-        self.lastWin = None     # Tracks if the last game ended in a win
+        self.winCount = 0  # Counts total wins (games won)
+        self.stage = 1  # Current stage (starts at 1)
+        self.lastWin = None  # Tracks if the last game ended in a win
+
+        self.highScores = self.loadHighScores()
 
         # UI elements
         self.timerText = OnscreenText(
@@ -125,6 +129,15 @@ class ShootingGame(ShowBase):
             pos=(0, 0),
             scale=0.1,
             fg=(1, 0, 0, 1)
+        )
+        # NUEVO: Elemento UI para mostrar los mejores tiempos
+        self.highScoreText = OnscreenText(
+            text=self.formatHighScores(),
+            pos=(0, 0.85),
+            scale=0.06,
+            fg=(1, 1, 0, 1),
+            align=TextNode.ACenter,
+            parent=base.a2dTopCenter
         )
 
         # Pre-load character textures
@@ -181,6 +194,45 @@ class ShootingGame(ShowBase):
             self.spawnBonusTask,
             "spawnBonusTask"
         )
+
+    def loadHighScores(self):
+        """Carga los mejores tiempos desde el archivo JSON."""
+        if os.path.exists(HIGH_SCORE_FILE):
+            try:
+                with open(HIGH_SCORE_FILE, 'r') as f:
+                    return json.load(f)
+            except (IOError, json.JSONDecodeError):
+                print(f"Error loading {HIGH_SCORE_FILE}. Starting with empty scores.")
+                return []
+        return []
+
+    def saveHighScores(self):
+        """Guarda la lista de mejores tiempos en el archivo JSON."""
+        # Ordenar de mayor a menor (tiempo de supervivencia)
+        self.highScores.sort(reverse=True)
+
+        # Limitar la lista
+        self.highScores = self.highScores[:MAX_HIGH_SCORES]
+
+        try:
+            with open(HIGH_SCORE_FILE, 'w') as f:
+                json.dump(self.highScores, f)
+        except IOError:
+            print(f"Error saving {HIGH_SCORE_FILE}.")
+
+    def formatHighScores(self):
+        """Formatea la lista de mejores tiempos para mostrar en pantalla."""
+        sorted_scores = sorted(self.highScores, reverse=True)[:MAX_HIGH_SCORES]
+
+        text = "🏆 Best Survival Times (s) 🏆\n"
+
+        if not sorted_scores:
+            text += "Play to set a record!"
+        else:
+            for i, time in enumerate(sorted_scores):
+                text += f"{i + 1}. {time:.1f}s\n"
+
+        return text.strip()
 
     def createRedFilter(self):
         """Creates the red filter overlay."""
@@ -317,13 +369,13 @@ class ShootingGame(ShowBase):
             mayChange=True,  # Permitir cambios en el texto
             parent=bonus_sprite  # Adjuntar al bonus sprite
         )
-        
+
         # Configurar el texto para que esté siempre visible
         text.setPos(0, -0.06)  # Posicionar justo sobre el bonus (reducido de 1 a 0.2)
         text.setBin('fixed', 1)  # Asegurar que se renderice después del bonus
         text.setDepthTest(False)  # Desactivar prueba de profundidad
         text.setDepthWrite(False)  # Desactivar escritura de profundidad
-        
+
         bonus_sprite.setPythonTag("text", text)  # Guardar referencia al texto
 
         return bonus_sprite
@@ -366,7 +418,7 @@ class ShootingGame(ShowBase):
         # Game Timer
         elapsed = globalClock.getRealTime() - self.gameStartTime
         self.timerText.setText(f"Time: {elapsed:.1f}")
-        if elapsed >= GAME_DURATION:  # Remove check for self.enemies
+        if elapsed >= GAME_DURATION:
             self.endGame(win=True)
         elif self.playerLife <= 0:
             self.endGame(win=False)
@@ -386,9 +438,9 @@ class ShootingGame(ShowBase):
         """Moves the camera behind and slightly above the player."""
         playerX = self.player.getX()
         self.camera.setPos(playerX, PLAYER_START_Y - CAMERA_DISTANCE,
-                            CAMERA_HEIGHT)
+                           CAMERA_HEIGHT)
         self.camera.lookAt(playerX, PLAYER_START_Y + CAMERA_LOOK_AT_OFFSET, 0)
-        self.originalCameraPos = self.camera.getPos() # Update original position
+        self.originalCameraPos = self.camera.getPos()  # Update original position
 
     def updateShots(self, dt):
         """Moves shots forward and removes out-of-bounds shots."""
@@ -460,7 +512,7 @@ class ShootingGame(ShowBase):
         # Calculate modifier based on bonus value (-10 = half, 0 = no change, 10 = double)
         if value == -10:  # Minimum value
             modifier = 0.5  # Halve the values
-        elif value == 0:   # Neutral value
+        elif value == 0:  # Neutral value
             modifier = 1.0  # No change
         elif value == 10:  # Maximum value
             modifier = 2.0  # Double the values
@@ -471,7 +523,7 @@ class ShootingGame(ShowBase):
 
         # Apply modifiers to shot interval and scale
         self.currentShotInterval = SHOT_INTERVAL / modifier  # Lower interval = faster shots
-        self.currentShotScale = SHOT_SCALE * modifier       # Higher scale = bigger shots
+        self.currentShotScale = SHOT_SCALE * modifier  # Higher scale = bigger shots
 
         # Reschedule the shot task with the new interval
         self.taskMgr.remove("autoShootTask")
@@ -518,9 +570,9 @@ class ShootingGame(ShowBase):
                         )
                         self.explosions.append(explosion)
                         self.taskMgr.doMethodLater(EXPLOSION_DURATION,
-                                                    self.removeExplosionTask,
-                                                    "removeExplosionTask",
-                                                    extraArgs=[explosion])
+                                                   self.removeExplosionTask,
+                                                   "removeExplosionTask",
+                                                   extraArgs=[explosion])
                         enemy.removeNode()
                         self.enemies.remove(enemy)
                         break  # Shot can only hit one enemy
@@ -547,7 +599,7 @@ class ShootingGame(ShowBase):
                         bonus.setTexture(self.bonusTextures["positive"])
                     else:
                         bonus.setTexture(self.bonusTextures["negative"])
-                    
+
                     # Update the bonus value text
                     text = bonus.getPythonTag("text")
                     if text:
@@ -558,12 +610,11 @@ class ShootingGame(ShowBase):
                     self.shots.remove(shot)
                     break  # Shot can only hit one bonus at a time
 
-
     def autoShootTask(self, task):
         """Automatically fires a shot from the player's current position."""
         if not self.gameOver:
             shot = self.createSprite(loader.loadTexture(SHOT_IMAGE),
-                                         self.player.getX(), self.player.getY(), self.currentShotScale)
+                                     self.player.getX(), self.player.getY(), self.currentShotScale)
             self.shots.append(shot)
         return Task.again
 
@@ -574,7 +625,7 @@ class ShootingGame(ShowBase):
         etype = random.choices(list(ENEMY_TYPES.keys()), ENEMY_SPAWN_PROB)[0]
         enemyX = random.uniform(LEFT_BOUND, RIGHT_BOUND)
         enemy = self.createSprite(loader.loadTexture(ENEMY_TYPES[etype]["image"]),
-                                     enemyX, ENEMY_SPAWN_Y, ENEMY_TYPES[etype]["scale"])
+                                  enemyX, ENEMY_SPAWN_Y, ENEMY_TYPES[etype]["scale"])
         enemy.setPythonTag("hp", ENEMY_TYPES[etype]["hp"])
         enemy.setPythonTag("speed", ENEMY_TYPES[etype]["speed"])
         self.enemies.append(enemy)
@@ -606,6 +657,12 @@ class ShootingGame(ShowBase):
         self.gameOver = True
         self.lastWin = win
         if win:
+            finalTime = globalClock.getRealTime() - self.gameStartTime
+            if finalTime >= GAME_DURATION:
+                self.highScores.append(finalTime)
+                self.saveHighScores()
+                self.highScoreText.setText(self.formatHighScores())
+
             # Increase win count and stage if the player wins
             self.winCount += 1
             self.stage += 1
