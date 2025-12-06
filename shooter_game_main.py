@@ -399,32 +399,29 @@ class ShootingGame(ShowBase):
                 self.shots.remove(shot)
 
     def updateEnemies(self, dt):
-        """Moves enemies downward and checks for collision with the player."""
-        for enemy in self.enemies[:]:
-            speed = enemy.getPythonTag("speed")
-            enemy.setY(enemy.getY() - speed * dt)
-            # Check for collision with the player (simple horizontal distance check)
-            if enemy.getY() <= PLAYER_START_Y:
-                # Check collision when enemy reaches player's y coordinate
-                if abs(enemy.getX() - self.player.getX()) < 1.0:
-                    self.playerLife -= 1
-                    self.lifeText.setText(f"Life: {self.playerLife}")
-                    self.startScreenShake()
-                    self.showRedFilter()
-                    if self.playerLife <= 0:
-                        self.endGame(win=False)
-                    # In either case (collision or just reaching bottom), reduce life and remove the enemy
-                if enemy in self.enemies: # Check if enemy was already removed due to collision
-                    self.playerLife -= 1
-                    self.lifeText.setText(f"Life: {self.playerLife}")
-                    self.startScreenShake()
-                    self.showRedFilter()
-                    enemy.removeNode()
-                    self.enemies.remove(enemy)
-                    if self.playerLife <= 0:
-                        self.endGame(win=False)
-                continue
+    for enemy in self.enemies[:]:
+        speed = enemy.getPythonTag("speed")
+        enemy.setY(enemy.getY() - speed * dt)
 
+        # Only check at player's vertical level
+        if enemy.getY() <= PLAYER_START_Y:
+            collided = abs(enemy.getX() - self.player.getX()) < 1.0
+
+            # Remove enemy (whether collided or just passed)
+            if enemy in self.enemies:
+                enemy.removeNode()
+                self.enemies.remove(enemy)
+
+            # Apply damage ONLY if collided
+            if collided:
+                self.playerLife -= 1
+                self.lifeText.setText(f"Life: {self.playerLife}")
+                self.startScreenShake()
+                self.showRedFilter()
+                if self.playerLife <= 0:
+                    self.endGame(win=False)
+
+            continue
     def updateBonuses(self, dt):
         """Moves bonuses downward and checks for collision with the player."""
         for bonus in self.bonuses[:]:
