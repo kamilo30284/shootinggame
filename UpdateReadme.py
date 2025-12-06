@@ -1,22 +1,26 @@
-# ...existing code...
 #!/usr/bin/env python3
 import subprocess
 import ast
 from pathlib import Path
 from datetime import datetime
+import sys
 
 README = Path("README.md")
 MARKER_START = "<!-- AUTO-GEN-START -->"
 MARKER_END = "<!-- AUTO-GEN-END -->"
 
+def repo_root():
+    out = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode().strip()
+    return Path(out)
+
 def git_changed_files():
-    # Get files changed in last commit
-    out = subprocess.check_output(["git", "show", "--name-status", "--pretty=format:", "HEAD"]).decode().strip()
+    # files changed in last commit (robust)
+    out = subprocess.check_output(["git", "--no-pager", "diff-tree", "--name-status", "--no-commit-id", "-r", "HEAD"]).decode().strip()
     files = []
     for line in out.splitlines():
-        parts = line.split()
-        if len(parts) >= 2:
-            status, fname = parts[0], parts[1]
+        parts = line.split(maxsplit=1)
+        if len(parts) == 2:
+            status, fname = parts
             files.append((status, fname))
     return files
 
@@ -38,14 +42,14 @@ def summarize_python(path: Path):
         return f"{header}"
     return "\n".join([header] + items)
 
-def build_section(changes):
+def build_section(changes, root: Path):
     ts = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     lines = [f"## Auto-generated changelog (updated {ts})", ""]
     if not changes:
         lines.append("_No changes detected in last commit._")
     else:
         for status, fname in changes:
-            p = Path(fname)
+            p = root / fname
             if p.exists() and p.suffix == ".py":
                 lines.append(f"- {status} {fname}")
                 lines.append(summarize_python(p))
@@ -59,19 +63,29 @@ def replace_section(readme_text, new_section):
         _, after = rest.split(MARKER_END, 1)
         return before + MARKER_START + "\n\n" + new_section + "\n\n" + MARKER_END + after
     else:
-        # Append markers at end
         return readme_text.rstrip() + "\n\n" + MARKER_START + "\n\n" + new_section + "\n\n" + MARKER_END + "\n"
 
-def main():
+def main(amend=False):
+    root = repo_root()
+    # run from repo root to resolve paths reliably
+    README_path = root / README
     changes = git_changed_files()
-    new_section = build_section(changes)
-    if not README.exists():
-        README.write_text("# Project\n\n", encoding="utf-8")
-    original = README.read_text(encoding="utf-8")
+    new_section = build_section(changes, root)
+    if not README_path.exists():
+        README_path.write_text("# Project\n\n", encoding="utf-8")
+    original = README_path.read_text(encoding="utf-8")
     updated = replace_section(original, new_section)
-    README.write_text(updated, encoding="utf-8")
+    README_path.write_text(updated, encoding="utf-8")
     print("README.md updated (auto-generated section).")
+    if amend:
+        # add README and amend last commit so README is included
+        try:
+            subprocess.check_call(["git", "add", str(README_path)], cwd=str(root))
+            subprocess.check_call(["git", "commit", "--amend", "--no-edit"], cwd=str(root))
+            print("README.md added to last commit (amended).")
+        except subprocess.CalledProcessError:
+            print("Failed to amend commit with README.", file=sys.stderr)
 
 if __name__ == "__main__":
-    main()
-# ...existing code...
+    amend_flag = "--amend" in sys.argv
+    main(amend=amend_flag)
